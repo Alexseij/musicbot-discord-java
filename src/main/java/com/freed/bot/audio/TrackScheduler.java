@@ -1,66 +1,49 @@
 package com.freed.bot.audio;
 
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+
+import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
-import com.sedmelluq.discord.lavaplayer.player.event.AudioEvent;
 import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
-import com.sedmelluq.discord.lavaplayer.player.event.AudioEventListener;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
+import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
-public class TrackScheduler extends AudioEventAdapter implements AudioEventListener {
 
-	private AudioPlayer player;
-	private Queue queue;
-	public TrackScheduler(AudioPlayer player , Queue queue) {
-		this.player = player;
-		this.queue = queue;
-	}
-	  @Override
-	  public void onPlayerPause(AudioPlayer player) {
-	    // Player was paused
-	  }
-
-	  @Override
-	  public void onPlayerResume(AudioPlayer player) {
-	    // Player was resumed
-	  }
-
-	  @Override
-	  public void onTrackStart(AudioPlayer player, AudioTrack track) {
-	    // A track started playing
-	  }
-
-	  @Override
-	  public void onTrackEnd(AudioPlayer player, AudioTrack track, AudioTrackEndReason endReason) {
-	    if (endReason.mayStartNext) {
-	      // Start next track
-			queue.removeTrack();
-			player.playTrack(queue.popTrack());
-	    }
-
-	    // endReason == FINISHED: A track finished or died by an exception (mayStartNext = true).
-	    // endReason == LOAD_FAILED: Loading of a track failed (mayStartNext = true).
-	    // endReason == STOPPED: The player was stopped.
-	    // endReason == REPLACED: Another track started playing while this had not finished
-	    // endReason == CLEANUP: Player hasn't been queried for a while, if you want you can put a
-	    //                       clone of this back to your queue
-	  }
-
-	  @Override
-	  public void onTrackException(AudioPlayer player, AudioTrack track, FriendlyException exception) {
-	    // An already playing track threw an exception (track end event will still be received separately)
-	  }
-
-	  @Override
-	  public void onTrackStuck(AudioPlayer player, AudioTrack track, long thresholdMs) {
-	    // Audio track has been unable to provide us any audio, might want to just start a new track
-	  }
+public class TrackScheduler implements AudioLoadResultHandler {
 	
-	  public void queue(AudioTrack track) {
-		  queue.pushTrack(track);
-	  }
-	  public void playMusic() {
-		  player.playTrack(queue.popTrack());
-	  }
+	private final AudioPlayer player;
+	public TrackScheduler(final AudioPlayer player) {
+		this.player = player;
+	}
+	@Override
+	public void trackLoaded(AudioTrack track) {
+		 // LavaPlayer found an audio source for us to play
+		// TODO Auto-generated method stub
+		player.playTrack(track);
+	}
 
+	@Override
+	public void playlistLoaded(AudioPlaylist playlist) {
+		// LavaPlayer found multiple AudioTracks from some playlist
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void noMatches() {
+		// LavaPlayer did not find any audio to extract
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void loadFailed(FriendlyException exception) {
+		// LavaPlayer could not parse an audio source for some reason	
+		// TODO Auto-generated method stub
+		
+	}
+	
 }

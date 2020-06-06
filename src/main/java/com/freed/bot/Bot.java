@@ -1,99 +1,77 @@
 package com.freed.bot;
-import javax.security.auth.login.LoginException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import com.freed.bot.audio.Queue;
-import com.freed.bot.audio.SendHandler;
-import com.freed.bot.audio.TrackScheduler;
-import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
+import com.freed.bot.audio.*;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
-import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
-import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
-import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
-import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
+import com.sedmelluq.discord.lavaplayer.track.playback.NonAllocatingAudioFrameBuffer;
 
-import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.entities.Activity;
-import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.MessageChannel;
-import net.dv8tion.jda.api.entities.VoiceChannel;
-import net.dv8tion.jda.api.events.message.guild.GuildMessageDeleteEvent;
-import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
-import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.dv8tion.jda.api.managers.AudioManager;
+import discord4j.core.DiscordClient;
+import discord4j.core.DiscordClientBuilder;
+import discord4j.core.GatewayDiscordClient;
+import discord4j.core.event.domain.message.MessageCreateEvent;
+import discord4j.core.object.VoiceState;
+import discord4j.core.object.entity.Member;
+import discord4j.core.object.entity.channel.VoiceChannel;
+import discord4j.voice.AudioProvider;
 
-public class Bot extends ListenerAdapter{
-	static boolean isUsed = false;
-	public static void main(String[] args) throws LoginException {
-		new JDABuilder("NzE3NTc4OTIyMDkwNTYxNTM3.XtsyTg.4lyQxEvuFE1C9sH1czvn8ofyAgo")
-        .addEventListeners(new Bot())
-        .setActivity(Activity.playing("Playing music"))
-        .build();
+public class Bot {
+	private static final Map<String , Command> commands = new HashMap<>();
+	static {
+		//Translate URL to AutioTrack objects
+		final AudioPlayerManager playerManager = new DefaultAudioPlayerManager();
+		playerManager.getConfiguration().setFrameBufferFactory(NonAllocatingAudioFrameBuffer::new);
+		//Parse remote sources like SoundCloud
+		AudioSourceManagers.registerRemoteSources(playerManager);
+		//Receive audio data
+		final AudioPlayer player = playerManager.createPlayer();
+		AudioProvider provider = new LavaPlayerAudioProvider(player);
+		
+		commands.put("ping", event ->event.getMessage()
+										  .getChannel().block()
+										  .createMessage("Pong").block());
+		commands.put("join", event ->{
+			final Member member = event.getMember().orElse(null);
+			if(member != null) {
+				final VoiceState voiceState = member.getVoiceState().block();
+				if(voiceState != null) {
+					final VoiceChannel channel = voiceState.getChannel().block();
+					if(channel != null) {
+						channel.join(spec -> spec.setProvider(provider)).block();
+					}
+				}
+			}
+		});
+		final TrackScheduler scheduler = new TrackScheduler(player);
+		commands.put("play", event -> {
+			final String content = event.getMessage().getContent();
+			final List<String> command = Arrays.asList(content.split(" "));
+			playerManager.loadItem(command.get(1) , scheduler);
+		});
+		
 		
 	}
-	 @Override
-	    public void onGuildMessageReceived(GuildMessageReceivedEvent event) 
-	    {
-	        if (!event.getMessage().getContentRaw().startsWith("!play")) return;
-	        
-	        if (event.getAuthor().isBot()) return;
-	        
-	        
-	        Guild guild = event.getGuild();
-	        //Test channel
-	        VoiceChannel channel = guild.getVoiceChannelsByName("music", true).get(0);
-	        AudioManager manager = guild.getAudioManager();
-	        
-	        AudioPlayerManager playerManager = new DefaultAudioPlayerManager();
-	        AudioSourceManagers.registerRemoteSources(playerManager);
-	        
-	        AudioPlayer player = playerManager.createPlayer();
-	        Queue trackQueue = new Queue();
-	        TrackScheduler trackScheduler = new TrackScheduler(player , trackQueue);
-	        player.addListener(trackScheduler);
-	        
-	        //Custom handler
-	        String line[] = event.getMessage().getContentRaw().split(" ");
-	        
-
-	        // MySendHandler should be your AudioSendHandler implementation
-	        manager.setSendingHandler(new SendHandler(player));
-	        // Here we finally connect to the target voice channel 
-	        // and it will automatically start pulling the audio from the SendHandler instance
-	        manager.openAudioConnection(channel);
-	        
-	        playerManager.loadItem(line[1], new AudioLoadResultHandler() {
-	        	  @Override
-	        	  public void trackLoaded(AudioTrack track) {
-	        	    if(trackQueue.tracks.size() == 0) {
-	        	    	trackScheduler.queue(track);
-	        	    	trackScheduler.playMusic();
-	        	    } else {
-	        	    	trackScheduler.queue(track);
-	        	    }
-	        	    trackScheduler.onTrackEnd(player, track, AudioTrackEndReason.FINISHED);
-	        	  }
-
-	        	  @Override
-	        	  public void playlistLoaded(AudioPlaylist playlist) {
-	        	    for (AudioTrack track : playlist.getTracks()) {
-	        	      trackScheduler.queue(track);
-	        	    }
-	        	  }
-
-	        	  @Override
-	        	  public void noMatches() {
-	        	    // Notify the user that we've got nothing
-	        	  }
-
-	        	  @Override
-	        	  public void loadFailed(FriendlyException throwable) {
-	        	    // Notify the user that everything exploded
-	        	  }
-	        	});
-	        
-	    }
+	public static void main(String args[]) {	
+		final GatewayDiscordClient client = DiscordClientBuilder.create(args[0]).build()
+			    .login()
+			    .block();
+		client.getEventDispatcher().on(MessageCreateEvent.class)
+								   .subscribe(event -> {
+									   final String content = event.getMessage().getContent();
+									   for(final Map.Entry<String , Command> entry : commands.entrySet()) {
+										   if(content.startsWith("!" + entry.getKey())) {
+											   entry.getValue().execute(event);
+											   break;
+										   }
+									   }
+									   
+								   });
+		client.onDisconnect().block();
+	}
 }
 
