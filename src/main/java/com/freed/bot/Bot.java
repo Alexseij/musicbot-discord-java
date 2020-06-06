@@ -1,6 +1,7 @@
 package com.freed.bot;
 import javax.security.auth.login.LoginException;
 
+import com.freed.bot.audio.Queue;
 import com.freed.bot.audio.SendHandler;
 import com.freed.bot.audio.TrackScheduler;
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
@@ -11,6 +12,7 @@ import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Activity;
@@ -23,25 +25,24 @@ import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.managers.AudioManager;
 
 public class Bot extends ListenerAdapter{
-
+	static boolean isUsed = false;
 	public static void main(String[] args) throws LoginException {
-		new JDABuilder("TOKEN")
+		new JDABuilder("NzE3NTc4OTIyMDkwNTYxNTM3.XtsyTg.4lyQxEvuFE1C9sH1czvn8ofyAgo")
         .addEventListeners(new Bot())
         .setActivity(Activity.playing("Playing music"))
         .build();
+		
 	}
 	 @Override
 	    public void onGuildMessageReceived(GuildMessageReceivedEvent event) 
 	    {
-	        // This makes sure we only execute our code when someone sends a message with "!play"
 	        if (!event.getMessage().getContentRaw().startsWith("!play")) return;
-	        // Now we want to exclude messages from bots since we want to avoid command loops in chat!
-	        // this will include own messages as well for bot accounts
-	        // if this is not a bot make sure to check if this message is sent by yourself!
+	        
 	        if (event.getAuthor().isBot()) return;
+	        
+	        
 	        Guild guild = event.getGuild();
-	        // This will get the first voice channel with the name "music"
-	        // matching by voiceChannel.getName().equalsIgnoreCase("music")
+	        //Test channel
 	        VoiceChannel channel = guild.getVoiceChannelsByName("music", true).get(0);
 	        AudioManager manager = guild.getAudioManager();
 	        
@@ -49,13 +50,30 @@ public class Bot extends ListenerAdapter{
 	        AudioSourceManagers.registerRemoteSources(playerManager);
 	        
 	        AudioPlayer player = playerManager.createPlayer();
-	        TrackScheduler trackScheduler = new TrackScheduler(player);
+	        Queue trackQueue = new Queue();
+	        TrackScheduler trackScheduler = new TrackScheduler(player , trackQueue);
 	        player.addListener(trackScheduler);
 	        
-	        playerManager.loadItem("https://www.youtube.com/watch?v=GWbpUj1IkzU", new AudioLoadResultHandler() {
+	        //Custom handler
+	        String line[] = event.getMessage().getContentRaw().split(" ");
+	        
+
+	        // MySendHandler should be your AudioSendHandler implementation
+	        manager.setSendingHandler(new SendHandler(player));
+	        // Here we finally connect to the target voice channel 
+	        // and it will automatically start pulling the audio from the SendHandler instance
+	        manager.openAudioConnection(channel);
+	        
+	        playerManager.loadItem(line[1], new AudioLoadResultHandler() {
 	        	  @Override
 	        	  public void trackLoaded(AudioTrack track) {
-	        	    trackScheduler.queue(track);
+	        	    if(trackQueue.tracks.size() == 0) {
+	        	    	trackScheduler.queue(track);
+	        	    	trackScheduler.playMusic();
+	        	    } else {
+	        	    	trackScheduler.queue(track);
+	        	    }
+	        	    trackScheduler.onTrackEnd(player, track, AudioTrackEndReason.FINISHED);
 	        	  }
 
 	        	  @Override
@@ -76,10 +94,6 @@ public class Bot extends ListenerAdapter{
 	        	  }
 	        	});
 	        
-	        // MySendHandler should be your AudioSendHandler implementation
-	        manager.setSendingHandler(new SendHandler(player));
-	        // Here we finally connect to the target voice channel 
-	        // and it will automatically start pulling the audio from the SendHandler instance
-	        manager.openAudioConnection(channel);
 	    }
 }
+
