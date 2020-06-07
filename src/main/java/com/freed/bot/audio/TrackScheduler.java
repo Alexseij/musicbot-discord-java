@@ -12,38 +12,31 @@ import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 
-public class TrackScheduler implements AudioLoadResultHandler {
-	
-	private final AudioPlayer player;
-	public TrackScheduler(final AudioPlayer player) {
-		this.player = player;
-	}
-	@Override
-	public void trackLoaded(AudioTrack track) {
-		 // LavaPlayer found an audio source for us to play
-		// TODO Auto-generated method stub
-		player.playTrack(track);
-	}
+public final class TrackScheduler extends AudioEventAdapter implements AudioLoadResultHandler {
+	 private final AudioPlayer player;
 
-	@Override
-	public void playlistLoaded(AudioPlaylist playlist) {
-		// LavaPlayer found multiple AudioTracks from some playlist
-		// TODO Auto-generated method stub
-		
-	}
+	    public TrackScheduler(final AudioPlayer player) {
+	        this.player = player;
+	    }
 
-	@Override
-	public void noMatches() {
-		// LavaPlayer did not find any audio to extract
-		// TODO Auto-generated method stub
-		
-	}
+	    @Override
+	    public void trackLoaded(final AudioTrack track) {
+	        // LavaPlayer found an audio source for us to play
+	        player.playTrack(track);
+	    }
 
-	@Override
-	public void loadFailed(FriendlyException exception) {
-		// LavaPlayer could not parse an audio source for some reason	
-		// TODO Auto-generated method stub
-		
-	}
-	
+	    @Override
+	    public void playlistLoaded(final AudioPlaylist playlist) {
+	        // LavaPlayer found multiple AudioTracks from some playlist
+	    }
+
+	    @Override
+	    public void noMatches() {
+	        // LavaPlayer did not find any audio to extract
+	    }
+
+	    @Override
+	    public void loadFailed(final FriendlyException exception) {
+	        // LavaPlayer could not parse an audio source for some reason
+	    }
 }
