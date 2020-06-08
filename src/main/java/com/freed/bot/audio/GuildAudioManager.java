@@ -11,7 +11,7 @@ import discord4j.voice.AudioProvider;
 
 public final class GuildAudioManager {
 	private static final Map<Snowflake, GuildAudioManager> MANAGERS = new ConcurrentHashMap<>();
-	public static GuildAudioManager of(final Snowflake id) {
+	public static GuildAudioManager of(Snowflake id) {
 		return MANAGERS.computeIfAbsent(id, ignored -> new GuildAudioManager());
 	}
 	
@@ -24,7 +24,7 @@ public final class GuildAudioManager {
 	    scheduler = new TrackScheduler(player);
 	    provider = new LavaPlayerAudioProvider(player);
 
-	    player.addListener(scheduler);
+	   // player.addListener(scheduler);
 	  }
 
 	public AudioProvider getProvider() {

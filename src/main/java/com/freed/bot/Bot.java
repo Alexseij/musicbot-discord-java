@@ -39,66 +39,48 @@ public class Bot {
 	//List of commands
 	private static final Map<String , Command> commands = new HashMap<>();
 	public static final AudioPlayerManager PLAYER_MANAGER;
-	static {
+	public static Snowflake id = null;
+	static { 
 		PLAYER_MANAGER = new DefaultAudioPlayerManager();
 		PLAYER_MANAGER.getConfiguration().setFrameBufferFactory(NonAllocatingAudioFrameBuffer::new);
 		AudioSourceManagers.registerRemoteSources(PLAYER_MANAGER);
 		AudioSourceManagers.registerLocalSource(PLAYER_MANAGER);
 		
-		commands.put("play" , event ->{
-			final Member member = event.getMember().orElse(null);
-			//final String content = event.getMessage().getContent();
-		    //final List<String> command = Arrays.asList(content.split(" "));
-			if(member != null) {
-				final VoiceState voiceState = member.getVoiceState().block();
-				if(voiceState != null) {
-					final VoiceChannel voiceChannel = voiceState.getChannel().block();
-					if(voiceChannel != null) {
-						final TrackScheduler trackScheduler = GuildAudioManager.of(voiceChannel.getGuildId()).getTrackScheduler();
-						PLAYER_MANAGER.loadItem("https://www.youtube.com/watch?v=NeQM1c-XCDc",trackScheduler);
-					}
-				}
-			}
-		});
-		commands.put("join", eventJ -> {
-			final Member member = eventJ.getMember().orElse(null);
-			if(member != null) {
-				final VoiceState voiceState = member.getVoiceState().block(); 
-				if(voiceState != null) {
-					final VoiceChannel channel = voiceState.getChannel().block();
-					if(channel != null) {
-						final AudioProvider provider = GuildAudioManager.of(channel.getGuildId()).getProvider();
-						final Mono<Void> onDisconnect = channel.join(spec -> spec.setProvider(provider))
-								.flatMap(connection -> {
-								    // The bot itself has a VoiceState; 1 VoiceState signals bot is alone
-								    final Publisher<Boolean> voiceStateCounter = channel.getVoiceStates()
-								      .count()
-								      .map(count -> 1L == count);
+		commands.put("join", eventJ -> Mono.justOrEmpty(eventJ.getMember())
+			    .flatMap(Member::getVoiceState)
+			    .flatMap(VoiceState::getChannel)
+			    .flatMap(channel -> channel.join(spec -> spec.setProvider(GuildAudioManager.of(channel.getGuildId()).getProvider()))
+			    		.flatMap(connection -> {
+			    			id = channel.getGuildId();
+			    			// The bot itself has a VoiceState; 1 VoiceState signals bot is alone
+			    		    final Publisher<Boolean> voiceStateCounter = channel.getVoiceStates()
+			    		      .count()
+			    		      .map(count -> 1L == count);
 
-								    // After 10 seconds, check if the bot is alone. This is useful if
-								    // the bot joined alone, but no one else joined since connecting
-								    final Mono<Void> onDelay = Mono.delay(Duration.ofSeconds(10L))
-								      .filterWhen(ignored -> voiceStateCounter)
-								      .switchIfEmpty(Mono.never())
-								      .then();
+			    		    // After 10 seconds, check if the bot is alone. This is useful if
+			    		    // the bot joined alone, but no one else joined since connecting
+			    		    final Mono<Void> onDelay = Mono.delay(Duration.ofSeconds(10L))
+			    		      .filterWhen(ignored -> voiceStateCounter)
+			    		      .switchIfEmpty(Mono.never())
+			    		      .then();
 
-								    // As people join and leave `channel`, check if the bot is alone.
-								    // Note the first filter is not strictly necessary, but it does prevent many unnecessary cache calls
-								    final Mono<Void> onEvent = channel.getClient().getEventDispatcher().on(VoiceStateUpdateEvent.class)
-								      .filter(event -> event.getOld().flatMap(VoiceState::getChannelId).map(channel.getId()::equals).orElse(false))
-								      .filterWhen(ignored -> voiceStateCounter)
-								      .next()
-								      .then();
+			    		    // As people join and leave `channel`, check if the bot is alone.
+			    		    // Note the first filter is not strictly necessary, but it does prevent many unnecessary cache calls
+			    		    final Mono<Void> onEvent = channel.getClient().getEventDispatcher().on(VoiceStateUpdateEvent.class)
+			    		      .filter(event -> event.getOld().flatMap(VoiceState::getChannelId).map(channel.getId()::equals).orElse(false))
+			    		      .filterWhen(ignored -> voiceStateCounter)
+			    		      .next()
+			    		      .then();
 
-								    // Disconnect the bot if either onDelay or onEvent are completed!
-								    return Mono.first(onDelay, onEvent).then(connection.disconnect());
-								  });
-						onDisconnect.block();
-					}
-				}
-			}
-			
-		});
+			    		    // Disconnect the bot if either onDelay or onEvent are completed!
+			    		    return Mono.first(onDelay, onEvent).then(connection.disconnect());
+			    		}))
+			    .then());
+		
+		commands.put("play", event -> Mono.justOrEmpty(event.getMessage().getContent())
+		    .map(content -> Arrays.asList(content.split(" ")))
+		    .doOnNext(command -> PLAYER_MANAGER.loadItem(command.get(1),GuildAudioManager.of(id).getTrackScheduler()))
+		    .then());
 		
 		
 	}
@@ -108,19 +90,14 @@ public class Bot {
 			    .block();
 		//Checking for commands
 		client.getEventDispatcher().on(MessageCreateEvent.class)
-	    // subscribe is like block, in that it will *request* for action
-	    // to be done, but instead of blocking the thread, waiting for it
-	    // to finish, it will just execute the results asynchronously.
-	    .subscribe(event -> {
-	        final String content = event.getMessage().getContent();
-	        for (final Map.Entry<String, Command> entry : commands.entrySet()) {
+	    // 3.1 Message.getContent() is a String
+	    .flatMap(event -> Mono.just(event.getMessage().getContent())
+	        .flatMap(content -> Flux.fromIterable(commands.entrySet())
 	            // We will be using ! as our "prefix" to any command in the system.
-	            if (content.startsWith('!' + entry.getKey())) {
-	                entry.getValue().execute(event);
-	                break;
-	            }
-	        }
-	    });
+	            .filter(entry -> content.startsWith('!' + entry.getKey()))
+	            .flatMap(entry -> entry.getValue().execute(event))
+	            .next()))
+	    .subscribe();
 		
 		client.onDisconnect().block();
 	}
