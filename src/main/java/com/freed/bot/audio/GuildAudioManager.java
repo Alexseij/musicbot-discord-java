@@ -24,7 +24,7 @@ public final class GuildAudioManager {
 	    scheduler = new TrackScheduler(player);
 	    provider = new LavaPlayerAudioProvider(player);
 
-	   // player.addListener(scheduler);
+	    player.addListener(scheduler);
 	  }
 
 	public AudioProvider getProvider() {
