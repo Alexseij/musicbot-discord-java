@@ -83,32 +83,12 @@ public class Bot {
 		    .map(content -> Arrays.asList(content.split(" ")))
 		    .doOnNext(command -> PLAYER_MANAGER.loadItem(command.get(1),GuildAudioManager.of(id).getTrackScheduler()))
 		    .then()); 
-		impCommands.put("skip", event -> {
+		commands.put("skip", event -> {
 		            	GuildAudioManager.of(id).getTrackScheduler().skipCurrent();
 		});
 	}
 	public static void main(String args[]) {
-		final GatewayDiscordClient client = DiscordClientBuilder.create(args[0]).build()
-			    .login()
-			    .block();
-		client.getEventDispatcher().on(MessageCreateEvent.class)
-	    .flatMap(event -> Mono.just(event.getMessage().getContent())
-	        .flatMap(content -> Flux.fromIterable(commands.entrySet())
-	            .filter(entry -> content.startsWith('!' + entry.getKey()))
-	            .flatMap(entry -> entry.getValue().execute(event))
-	            .next()))
-	    .subscribe();
-		client.getEventDispatcher().on(MessageCreateEvent.class)
-	    .subscribe(event -> {
-	        final String content = event.getMessage().getContent();
-	        for (final Map.Entry<String, CommandImp> entry : impCommands.entrySet()) {
-	            if (content.startsWith('!' + entry.getKey())) {
-	                entry.getValue().execute(event);
-	                break;
-	            }
-	        }
-	    });
-		client.onDisconnect().block();
+		final JDA client = JDABulder.createDefault(args[0]).build();
 	}
 }
 
