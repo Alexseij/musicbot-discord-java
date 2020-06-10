@@ -13,30 +13,69 @@ import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 
 public final class TrackScheduler extends AudioEventAdapter implements AudioLoadResultHandler {
-	 private final AudioPlayer player;
-
+	 	private final AudioPlayer player;
+	 	private final List<AudioTrack> queue;
+	 	public int position = 0;
 	    public TrackScheduler(final AudioPlayer player) {
 	        this.player = player;
+	        queue = Collections.synchronizedList(new LinkedList<>());
+	    }
+	    
+	    public List<AudioTrack> getQueue() {
+	    	return queue;
 	    }
 
-	    @Override
-	    public void trackLoaded(final AudioTrack track) {
-	        // LavaPlayer found an audio source for us to play
-	    	player.playTrack(track);
+	    public synchronized boolean play(final AudioTrack track) {
+	    	return play(track , false);
 	    }
+	    public synchronized boolean play(final AudioTrack track , boolean force) {
+	    	final boolean playing = player.startTrack(track, !force);
+	    	if(!playing) {
+	    		queue.add(track);
+	    	}
+	    	return playing;
+	    }
+	    
+	    public boolean skip() {
+	    	System.out.print(position);
+	    	return !queue.isEmpty() && play(queue.remove(position++) , true); 
+	    }
+	    public void skipCurrent() {
+	    	player.stopTrack();
+	    	position++;
+	    	player.startTrack(queue.get(position) , false);
+	    }
+	    
+	    @Override
+	    public void onTrackEnd(final AudioPlayer player, final AudioTrack track, final AudioTrackEndReason endReason) {
+	      if (endReason.mayStartNext) {
+	        if(skip()) {
+	        	play(queue.get(position));
+	        }
+	      }
+	    }
+		@Override
+		public void trackLoaded(AudioTrack track) {
+			play(track);
+		}
 
-	    @Override
-	    public void playlistLoaded(final AudioPlaylist playlist) {
-	        // LavaPlayer found multiple AudioTracks from some playlist
-	    }
+		@Override
+		public void playlistLoaded(AudioPlaylist playlist) {
+			for(AudioTrack track : playlist.getTracks()) {
+				System.out.println(track.getIdentifier());
+				play(track);
+			}	
+		}
+		@Override
+		public void noMatches() {
+			// TODO Auto-generated method stub
+			
+		}
 
-	    @Override
-	    public void noMatches() {
-	        // LavaPlayer did not find any audio to extract
-	    }
-
-	    @Override
-	    public void loadFailed(final FriendlyException exception) {
-	        // LavaPlayer could not parse an audio source for some reason
-	    }
+		@Override
+		public void loadFailed(FriendlyException exception) {
+			// TODO Auto-generated method stub
+			
+		}
+	    
 }

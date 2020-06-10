@@ -38,7 +38,10 @@ import reactor.core.publisher.Mono;
 public class Bot {
 	//List of commands
 	private static final Map<String , Command> commands = new HashMap<>();
+	private static final Map<String , CommandImp> impCommands = new HashMap<>();
+	
 	public static final AudioPlayerManager PLAYER_MANAGER;
+	
 	public static Snowflake id = null;
 	static { 
 		PLAYER_MANAGER = new DefaultAudioPlayerManager();
@@ -76,29 +79,35 @@ public class Bot {
 			    		    return Mono.first(onDelay, onEvent).then(connection.disconnect());
 			    		}))
 			    .then());
-		
 		commands.put("play", event -> Mono.justOrEmpty(event.getMessage().getContent())
 		    .map(content -> Arrays.asList(content.split(" ")))
 		    .doOnNext(command -> PLAYER_MANAGER.loadItem(command.get(1),GuildAudioManager.of(id).getTrackScheduler()))
-		    .then());
-		
-		
+		    .then()); 
+		impCommands.put("skip", event -> {
+		            	GuildAudioManager.of(id).getTrackScheduler().skipCurrent();
+		});
 	}
 	public static void main(String args[]) {
 		final GatewayDiscordClient client = DiscordClientBuilder.create(args[0]).build()
 			    .login()
 			    .block();
-		//Checking for commands
 		client.getEventDispatcher().on(MessageCreateEvent.class)
-	    // 3.1 Message.getContent() is a String
 	    .flatMap(event -> Mono.just(event.getMessage().getContent())
 	        .flatMap(content -> Flux.fromIterable(commands.entrySet())
-	            // We will be using ! as our "prefix" to any command in the system.
 	            .filter(entry -> content.startsWith('!' + entry.getKey()))
 	            .flatMap(entry -> entry.getValue().execute(event))
 	            .next()))
 	    .subscribe();
-		
+		client.getEventDispatcher().on(MessageCreateEvent.class)
+	    .subscribe(event -> {
+	        final String content = event.getMessage().getContent();
+	        for (final Map.Entry<String, CommandImp> entry : impCommands.entrySet()) {
+	            if (content.startsWith('!' + entry.getKey())) {
+	                entry.getValue().execute(event);
+	                break;
+	            }
+	        }
+	    });
 		client.onDisconnect().block();
 	}
 }
